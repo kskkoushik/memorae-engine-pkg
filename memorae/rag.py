@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -13,6 +15,10 @@ if TYPE_CHECKING:
 COLLECTION_NAME = "memorae_events"
 EMBED_URL = "https://openrouter.ai/api/v1/embeddings"
 META_FILE = ".memorae_index_meta.json"
+
+
+class EmbeddingError(RuntimeError):
+    """Embedding API returned no usable vectors."""
 
 
 def _pkg_root() -> str:
@@ -26,12 +32,9 @@ def _persist_dir() -> str:
     return path
 
 
-def embed_texts(texts: list[str], api_key: str | None = None,
-                model: str | None = None) -> list[list[float]]:
-    if not texts:
-        return []
-    api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
-    model = model or os.environ.get("MEMORAE_EMBED_MODEL", "openai/text-embedding-3-small")
+def _request_embeddings(
+    texts: list[str], api_key: str, model: str
+) -> list[list[float]]:
     body = json.dumps({"model": model, "input": texts}).encode()
     req = urllib.request.Request(
         EMBED_URL,
@@ -45,8 +48,53 @@ def embed_texts(texts: list[str], api_key: str | None = None,
     )
     with urllib.request.urlopen(req, timeout=180) as resp:
         data = json.loads(resp.read())
+
+    if data.get("error"):
+        err = data["error"]
+        msg = err.get("message", err) if isinstance(err, dict) else str(err)
+        raise EmbeddingError(f"embedding API error: {msg}")
+
     items = sorted(data.get("data", []), key=lambda d: d.get("index", 0))
-    return [item["embedding"] for item in items]
+    embeddings: list[list[float]] = []
+    for item in items:
+        emb = item.get("embedding")
+        if emb:
+            embeddings.append(emb)
+    return embeddings
+
+
+def embed_texts(
+    texts: list[str],
+    api_key: str | None = None,
+    model: str | None = None,
+    *,
+    max_retries: int = 2,
+) -> list[list[float]]:
+    if not texts:
+        return []
+    api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        raise EmbeddingError("OPENROUTER_API_KEY is not set")
+    model = model or os.environ.get("MEMORAE_EMBED_MODEL", "openai/text-embedding-3-small")
+
+    last_err: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            embeddings = _request_embeddings(texts, api_key, model)
+            if len(embeddings) == len(texts):
+                return embeddings
+            last_err = EmbeddingError(
+                f"embedding API returned {len(embeddings)} vector(s) for {len(texts)} input(s)"
+            )
+        except (EmbeddingError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+            last_err = e
+        except KeyError as e:
+            last_err = EmbeddingError(f"embedding API response missing field: {e}")
+
+        if attempt < max_retries:
+            time.sleep(0.4 * (attempt + 1))
+
+    raise EmbeddingError(str(last_err) if last_err else "embedding API returned no vectors")
 
 
 @dataclass
@@ -153,7 +201,10 @@ class EventIndex:
         batch_size = 16
         for i in range(0, len(ids), batch_size):
             batch_docs = documents[i : i + batch_size]
-            embeddings = embed_texts(batch_docs, api_key, embed_model)
+            try:
+                embeddings = embed_texts(batch_docs, api_key, embed_model)
+            except EmbeddingError:
+                return None
             collection.add(
                 ids=ids[i : i + batch_size],
                 documents=batch_docs,
@@ -173,11 +224,18 @@ class EventIndex:
     def query(self, query_text: str, top_k: int | None = None) -> list[RagHit]:
         if top_k is None:
             top_k = int(os.environ.get("MEMORAE_RAG_TOP_K", "20"))
-        if self._indexed == 0:
+        query_text = (query_text or "").strip()
+        if not query_text or self._indexed == 0:
             return []
 
         api_key = os.environ.get("OPENROUTER_API_KEY", "")
-        q_emb = embed_texts([query_text], api_key, self._embed_model)
+        try:
+            q_emb = embed_texts([query_text], api_key, self._embed_model)
+        except EmbeddingError:
+            return []
+        if not q_emb:
+            return []
+
         result = self._collection.query(
             query_embeddings=q_emb,
             n_results=min(top_k, self._indexed),

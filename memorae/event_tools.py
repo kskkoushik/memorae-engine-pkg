@@ -21,6 +21,19 @@ def _log_tool(name: str, reason: str, **params) -> None:
         print(f"  {key}: {val}", file=sys.stderr, flush=True)
 
 
+def _empty_search_result(*, limit: int = 30, error: str | None = None) -> dict:
+    out = {
+        "events": [],
+        "total_matched": 0,
+        "returned": 0,
+        "hidden_due_to_limit": 0,
+        "limit": limit,
+    }
+    if error:
+        out["error"] = error
+    return out
+
+
 def build_event_tools(engine: "Engine") -> list:
     store: EventStore = engine.store
 
@@ -103,16 +116,36 @@ def build_event_tools(engine: "Engine") -> list:
         """Semantic (RAG) search — last resort only. Use when dates are unknown and you must find an answer, or when get_event_by_keyword returned no matches or too many noisy matches. Prefer search_event_by_date and get_event_by_keyword first."""
         _log_tool("search_event_by_query", reason, query=query,
                   source_names=source_names, start_date=start_date, end_date=end_date, limit=limit)
+
+        query = (query or "").strip()
+        if not query:
+            print("  → empty query", file=sys.stderr, flush=True)
+            return json.dumps(_empty_search_result(
+                limit=limit,
+                error="query is required — use get_event_by_keyword or search_event_by_date instead",
+            ))
+
         rag = _rag()
         if rag is None:
             print("  → RAG unavailable", file=sys.stderr, flush=True)
-            return json.dumps({
-                "error": "RAG index unavailable — use get_event_by_keyword or search_event_by_date instead",
-                "events": [], "total_matched": 0, "returned": 0, "hidden_due_to_limit": 0,
-            })
+            return json.dumps(_empty_search_result(
+                limit=limit,
+                error="RAG index unavailable — use get_event_by_keyword or search_event_by_date instead",
+            ))
 
         top_k = max(limit * 3, int(__import__("os").environ.get("MEMORAE_RAG_TOP_K", "60")))
-        hits = rag.query(query, top_k=top_k)
+        try:
+            hits = rag.query(query, top_k=top_k)
+        except Exception as e:
+            print(f"  → RAG query failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            return json.dumps(_empty_search_result(
+                limit=limit,
+                error=(
+                    f"Semantic search failed ({type(e).__name__}: {e}). "
+                    "Fall back to get_event_by_keyword or search_event_by_date."
+                ),
+            ))
+
         scores = {h.idx: h.score for h in hits}
         indices = [h.idx for h in hits]
 
@@ -121,19 +154,34 @@ def build_event_tools(engine: "Engine") -> list:
         _, _, err = validate_date_range(start, end)
         if err:
             print(f"  → error: {err}", file=sys.stderr, flush=True)
-            return json.dumps({"error": err, "events": [], "total_matched": 0,
-                               "returned": 0, "hidden_due_to_limit": 0})
+            return json.dumps(_empty_search_result(limit=limit, error=err))
 
-        result = store.search_by_indices(
-            indices,
-            sources=source_names,
-            start=start,
-            end=end,
-            limit=limit,
-            scores=scores,
-        )
+        try:
+            result = store.search_by_indices(
+                indices,
+                sources=source_names,
+                start=start,
+                end=end,
+                limit=limit,
+                scores=scores,
+            )
+        except Exception as e:
+            print(f"  → result filter failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            return json.dumps(_empty_search_result(
+                limit=limit,
+                error=(
+                    f"Semantic search results could not be filtered ({type(e).__name__}: {e}). "
+                    "Fall back to get_event_by_keyword or search_event_by_date."
+                ),
+            ))
+
         result["query"] = query
         result["rag_hits"] = len(hits)
+        if not hits:
+            result["notice"] = (
+                "Semantic search returned no matches — try get_event_by_keyword "
+                "or search_event_by_date."
+            )
         print(f"  → rag_hits={len(hits)}, matched={result.get('total_matched')}, "
               f"returned={result.get('returned')}", file=sys.stderr, flush=True)
         return json.dumps(result, indent=2)
