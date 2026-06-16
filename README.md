@@ -37,3 +37,14 @@ memorae_mock_events.json → EventStore → optional ChromaDB RAG → LangChain 
 ## Config (`.env`)
 
 See `.env.example` for `OPENROUTER_API_KEY`, `MEMORAE_LLM`, `MEMORAE_RAG`, `MEMORAE_EVENTS`, `MEMORAE_NOW`, etc.
+
+## Deploy to Modal
+
+```bash
+pip install modal
+modal token set --token-id <ID> --token-secret <SECRET>
+modal secret create memorae-env --from-dotenv .env
+modal deploy modal_app.py
+```
+
+The app uses a Modal Volume at `/data/chroma` for persistent RAG index storage.

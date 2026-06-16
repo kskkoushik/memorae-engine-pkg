@@ -8,3 +8,6 @@ langchain>=1.0
 langchain-core>=0.3
 langchain-openrouter>=0.1
 langgraph>=0.4
+
+# Deploy (optional)
+modal>=0.73
