@@ -30,7 +30,9 @@ def _log_tool(name: str, reason: str, **params) -> None:
 
 def build_event_tools(engine: "Engine") -> list:
     store: EventStore = engine.store
-    rag = engine.rag_index
+
+    def _rag():
+        return engine.ensure_rag()
 
     @tool
     def get_available_sources(
@@ -105,9 +107,10 @@ def build_event_tools(engine: "Engine") -> list:
         end_date: Annotated[Optional[str], "Optional ISO end date/datetime"] = None,
         limit: Annotated[int, "Max events to return"] = 30,
     ) -> str:
-        """Semantic (RAG) search for events relevant to a question. Best for meaning-based recall. Optional filters."""
+        """Semantic (RAG) search — last resort only. Use when dates are unknown and you must find an answer, or when get_event_by_keyword returned no matches or too many noisy matches. Prefer search_event_by_date and get_event_by_keyword first."""
         _log_tool("search_event_by_query", reason, query=query,
                   source_names=source_names, start_date=start_date, end_date=end_date, limit=limit)
+        rag = _rag()
         if rag is None:
             print("  → RAG unavailable", file=sys.stderr, flush=True)
             return json.dumps({

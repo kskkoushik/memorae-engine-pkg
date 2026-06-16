@@ -23,6 +23,11 @@ def _log(msg: str) -> None:
     print(f"[memorae:agent] {msg}", file=sys.stderr, flush=True)
 
 
+def _agent_config() -> dict:
+    limit = int(os.environ.get("MEMORAE_RECURSION_LIMIT", "40"))
+    return {"recursion_limit": limit}
+
+
 def _model():
     from langchain_openrouter import ChatOpenRouter
 
@@ -57,7 +62,7 @@ class MemoryAgent:
             tools=self._tools,
             system_prompt=system,
         )
-        _log(f"ready | owner={engine.store.owner} | events={len(engine.store._visible)} | rag={engine.rag_index is not None}")
+        _log(f"ready | owner={engine.store.owner} | events={len(engine.store._visible)} | rag={engine.rag_index is not None} | recursion_limit={_agent_config()['recursion_limit']}")
 
     def _extract_text(self, chunk) -> str:
         if chunk is None:
@@ -194,6 +199,7 @@ class MemoryAgent:
         try:
             async for event in self._agent.astream_events(
                 {"messages": [{"role": "user", "content": query}]},
+                config=_agent_config(),
                 version="v2",
             ):
                 for mapped in self._map_stream_event(event):

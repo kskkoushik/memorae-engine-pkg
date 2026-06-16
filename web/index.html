@@ -54,9 +54,15 @@ body{background:radial-gradient(ellipse 80% 50% at 100% -10%,rgba(94,234,212,.07
 .skel-line{height:10px;border-radius:6px;background:linear-gradient(90deg,var(--raised) 25%,var(--hover) 50%,var(--raised) 75%);background-size:200% 100%;animation:shimmer 1.4s ease infinite}
 .skel-line:nth-child(1){width:92%}.skel-line:nth-child(2){width:78%}.skel-line:nth-child(3){width:55%}
 
-/* activity */
-.activity{display:flex;flex-direction:column;gap:8px}
+/* activity — tool chips only */
+.activity{display:flex;flex-direction:column;gap:6px;margin-bottom:4px}
 .tools-list{display:flex;flex-direction:column;gap:6px}
+
+/* thinking — pinned just above the answer */
+.think-panel{
+  border:1px solid var(--line);border-radius:12px;background:var(--surface);
+  overflow:hidden;animation:rise .2s ease;margin-bottom:8px;
+}
 
 /* tool chip — name + reason only */
 .tool-chip{
@@ -82,8 +88,7 @@ body{background:radial-gradient(ellipse 80% 50% at 100% -10%,rgba(94,234,212,.07
 }
 .tool-chip.open .tool-chip-detail{display:block}
 
-/* reasoning panel — collapsible, separate */
-.think-panel{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;animation:rise .2s ease}
+/* reasoning panel — collapsible, sits directly above answer */
 .think-panel.live{border-color:rgba(251,191,36,.25)}
 .think-head{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;user-select:none}
 .think-head:hover{background:var(--hover)}
@@ -260,6 +265,10 @@ function addAgentTurn() {
   activity.className = "activity";
   activity.style.display = "none";
 
+  const toolsList = document.createElement("div");
+  toolsList.className = "tools-list";
+  activity.appendChild(toolsList);
+
   const thinkPanel = document.createElement("div");
   thinkPanel.className = "think-panel";
   thinkPanel.style.display = "none";
@@ -272,12 +281,6 @@ function addAgentTurn() {
     </div>
     <div class="think-body"></div>`;
   thinkPanel.querySelector(".think-head").onclick = () => thinkPanel.classList.toggle("open");
-
-  const toolsList = document.createElement("div");
-  toolsList.className = "tools-list";
-
-  activity.appendChild(thinkPanel);
-  activity.appendChild(toolsList);
 
   const answer = document.createElement("div");
   answer.className = "answer";
@@ -297,6 +300,7 @@ function addAgentTurn() {
 
   block.appendChild(loader);
   block.appendChild(activity);
+  block.appendChild(thinkPanel);
   block.appendChild(answer);
   block.appendChild(expToggle);
   block.appendChild(expPanel);
@@ -361,7 +365,6 @@ function addToolChip(ui, name, reason, status) {
 function ensureThinking(ui) {
   ui.thinkPanel.style.display = "block";
   ui.thinkPanel.classList.add("live");
-  showActivity(ui);
 }
 
 function updateThinking(ui, full, streaming) {

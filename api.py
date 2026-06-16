@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
-load_dotenv()
+HERE = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(HERE, ".env"))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -23,7 +24,6 @@ from pydantic import BaseModel
 
 from memorae.engine import Engine, DEFAULT_NOW
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 _events = os.environ.get(
     "MEMORAE_EVENTS",
     os.path.join(HERE, "memorae_mock_events.json"),
@@ -50,6 +50,9 @@ def engine() -> Engine:
         if not os.path.exists(EVENTS):
             raise RuntimeError(f"events file not found: {EVENTS}")
         _engine = Engine.from_events_file(EVENTS, now=now)
+        if _engine.rag_index is None:
+            import sys
+            print("[api] WARNING: RAG index not loaded — semantic search will retry on first query", file=sys.stderr, flush=True)
     return _engine
 
 
