@@ -2,7 +2,7 @@
 
 **Live demo:** [https://kskkoushik135--memorae-web.modal.run](https://kskkoushik135--memorae-web.modal.run)
 
-**Memorae** is an agentic personal-memory assistant. It reads a real message stream — WhatsApp, Slack, Gmail, calendar, notes, reminders — and answers questions that require **judgement over time**: what matters today, what is slipping, what changed, what is still open.
+**Memorae** is an agentic personal-memory assistant. It reads a real message stream -WhatsApp, Slack, Gmail, calendar, notes, reminders -and answers questions that require **judgement over time**: what matters today, what is slipping, what changed, what is still open.
 
 There are no pre-labelled commitments, no regex enrichment pipeline, and no hidden state the model can hallucinate from. The LLM discovers everything by **calling tools** over raw events, then synthesizes a grounded answer with an optional audit trail.
 
@@ -48,9 +48,9 @@ memorae_mock_events.json
 | UI | `web/index.html` | Streaming chat with tool chips and explanation toggle |
 | Deploy | `modal_app.py` | Modal ASGI deployment with persistent Chroma volume |
 
-For the full end-to-end design — indexing, tool loop, example walkthrough, agent rules — see **[DESIGN.md](DESIGN.md)**.
+For the full end-to-end design -indexing, tool loop, example walkthrough, agent rules -see **[DESIGN.md](DESIGN.md)**.
 
-For how to evaluate the system — offline, online, regression, subjective rubrics — see **[EVALUATION.md](EVALUATION.md)**.
+For how to evaluate the system -offline, online, regression, subjective rubrics -see **[EVALUATION.md](EVALUATION.md)**.
 
 ---
 
@@ -101,9 +101,9 @@ Each event is a raw message with three fields:
 }
 ```
 
-- **`timestamp`** — ISO-8601 UTC. Events after scenario `now` are invisible.
-- **`source`** — channel name (`whatsapp`, `slack`, `gmail`, `calendar`, …).
-- **`content`** — full message text. All meaning (deadlines, names, status updates) lives here.
+- **`timestamp`** -ISO-8601 UTC. Events after scenario `now` are invisible.
+- **`source`** -channel name (`whatsapp`, `slack`, `gmail`, `calendar`, …).
+- **`content`** -full message text. All meaning (deadlines, names, status updates) lives here.
 
 The mock dataset (`memorae_mock_events.json`) has ~200 events; 164 are visible at the default scenario time `2026-04-13T03:00:00Z`. Owner is inferred as **Aarav** from first-person messages.
 
@@ -119,7 +119,7 @@ Every tool requires a `reason` string (logged and shown in the UI).
 | `search_event_by_date` | Events in a date range | **Default first step** for time-shaped questions |
 | `search_event_by_source` | One channel, optional dates | "Slack this week", "Gmail from Nina" |
 | `get_event_by_keyword` | Word/phrase search (fuzzy) | Named person, project, topic (`UIE`, `Nina`) |
-| `search_event_by_query` | Semantic RAG search | **Last resort** — unknown dates or keyword failure |
+| `search_event_by_query` | Semantic RAG search | **Last resort** -unknown dates or keyword failure |
 
 All search tools return:
 
@@ -133,7 +133,7 @@ All search tools return:
 }
 ```
 
-If `hidden_due_to_limit > 0`, the agent must narrow or re-query — never answer "everything about X" from a truncated slice.
+If `hidden_due_to_limit > 0`, the agent must narrow or re-query -never answer "everything about X" from a truncated slice.
 
 ---
 
@@ -141,13 +141,13 @@ If `hidden_due_to_limit > 0`, the agent must narrow or re-query — never answer
 
 The full rules live in `memorae/prompts.py`. Core principles:
 
-1. **Evidence only** — every claim must trace to a tool result event.
-2. **Future is invisible** — never cite events after scenario `now`.
-3. **Newer wins** — later messages supersede earlier ones (deadline moves, completions).
-4. **Date-first retrieval** — compute windows from `now`; adaptive 3d → 7d → 14d for open questions.
-5. **Semantic search is last resort** — only when dates are unknown or keyword search fails (0 hits / too many noisy hits).
-6. **Every tool call needs `reason`** — one sentence explaining why.
-7. **Answer + optional `<explanation>`** — human answer first; audit block with cited `idx` values when relevant.
+1. **Evidence only** -every claim must trace to a tool result event.
+2. **Future is invisible** -never cite events after scenario `now`.
+3. **Newer wins** -later messages supersede earlier ones (deadline moves, completions).
+4. **Date-first retrieval** -compute windows from `now`; adaptive 3d → 7d → 14d for open questions.
+5. **Semantic search is last resort** -only when dates are unknown or keyword search fails (0 hits / too many noisy hits).
+6. **Every tool call needs `reason`** -one sentence explaining why.
+7. **Answer + optional `<explanation>`** -human answer first; audit block with cited `idx` values when relevant.
 
 ---
 
@@ -182,7 +182,7 @@ Copy `.env.example` to `.env`:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `OPENROUTER_API_KEY` | — | LLM + embeddings |
+| `OPENROUTER_API_KEY` | -| LLM + embeddings |
 | `MEMORAE_LLM` | `1` | Enable agent |
 | `MEMORAE_LLM_MODEL` | `moonshotai/kimi-k2-thinking` | Chat model |
 | `MEMORAE_RAG` | `1` | Enable Chroma index |
@@ -246,28 +246,28 @@ Today a typical query costs **2–4 LLM round-trips** (plan → tool → read �
 | **Kill semantic search on the hot path** | −200–800ms | −embedding cost | Lose paraphrase recall; acceptable if keyword + date cover 95% of queries (our prompt already treats RAG as last resort) |
 | **Cap tool loop at 2 rounds** (down from 40) with a hard "read then answer" policy | −30–50% | −30–50% | May miss edge cases needing a third narrow pass; add regression tests |
 | **Pre-warm containers** (Modal `min_containers=1`, keep engine singleton hot) | Eliminates cold start | +idle cost | None for warm requests |
-| **Cache tool results** keyed by `(query_hash, date_window, tool, params)` TTL 5–15 min | −50% on repeat/similar queries | −50% LLM input tokens on cache hit | Stale if new events arrive — use TTL + invalidate on ingest |
+| **Cache tool results** keyed by `(query_hash, date_window, tool, params)` TTL 5–15 min | −50% on repeat/similar queries | −50% LLM input tokens on cache hit | Stale if new events arrive -use TTL + invalidate on ingest |
 | **Precompute daily summaries** per source/topic at ingest time ("Apr 12 Slack: UIE deadline moved to Apr 13") | −60% tokens per query | −60% | Summaries can miss nuance; agent reads raw events only when summary is insufficient |
-| **Tiered memory** — hot: last 7 days in RAM index; warm: keyword index for full history; cold: RAG only offline | Faster date scans | Cheaper storage/compute | Older open loops need explicit keyword or widened window |
-| **Shrink tool payloads** — return `idx + snippet` first; full `content` only on second fetch by index | −20% tokens | −20% | Extra tool round if snippets insufficient |
-| **Streaming-first UX** — show first token at 500ms even if tools still running (parallel plan + prefetch today's events) | Perceived <2s | Neutral | Complexity in partial-answer handling |
+| **Tiered memory** -hot: last 7 days in RAM index; warm: keyword index for full history; cold: RAG only offline | Faster date scans | Cheaper storage/compute | Older open loops need explicit keyword or widened window |
+| **Shrink tool payloads** -return `idx + snippet` first; full `content` only on second fetch by index | −20% tokens | −20% | Extra tool round if snippets insufficient |
+| **Streaming-first UX** -show first token at 500ms even if tools still running (parallel plan + prefetch today's events) | Perceived <2s | Neutral | Complexity in partial-answer handling |
 
 ### Recommended 2s / −80% stack
 
 1. **Haiku-class router** for tool selection (1 round, max 2 tools).
-2. **No RAG at runtime** — pre-built keyword + date indexes only; rebuild RAG offline for eval, not prod hot path.
-3. **Precomputed "open loops" digest** refreshed hourly (deadline, person, status, last mention idx) — agent reads digest + fetches 5–10 raw events max.
+2. **No RAG at runtime** -pre-built keyword + date indexes only; rebuild RAG offline for eval, not prod hot path.
+3. **Precomputed "open loops" digest** refreshed hourly (deadline, person, status, last mention idx) -agent reads digest + fetches 5–10 raw events max.
 4. **Container always warm** + **Chroma on persistent volume** (already on Modal).
-5. **Aggressive caching** of `(today's events, owner focus query)` — most morning "what should I focus on" queries hit cache.
+5. **Aggressive caching** of `(today's events, owner focus query)` -most morning "what should I focus on" queries hit cache.
 
 ### What we would not sacrifice
 
-- **Evidence grounding** — every claim still maps to event `idx`.
-- **Future-leak guard** — events after `now` never enter context.
-- **Supersession** — agent still resolves "newer wins" by reading chronologically within a thread.
-- **Regression suite** — see [EVALUATION.md](EVALUATION.md); faster/cheaper changes that break traps are rejected.
+- **Evidence grounding** -every claim still maps to event `idx`.
+- **Future-leak guard** -events after `now` never enter context.
+- **Supersession** -agent still resolves "newer wins" by reading chronologically within a thread.
+- **Regression suite** -see [EVALUATION.md](EVALUATION.md); faster/cheaper changes that break traps are rejected.
 
-The fundamental tradeoff: **agentic flexibility vs. precomputed structure**. Under tight latency/cost, shift left — precompute priorities at ingest, use the LLM only to narrate a small, verified slice.
+The fundamental tradeoff: **agentic flexibility vs. precomputed structure**. Under tight latency/cost, shift left -precompute priorities at ingest, use the LLM only to narrate a small, verified slice.
 
 ---
 
