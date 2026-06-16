@@ -1,5 +1,7 @@
 # Memorae
 
+**Live demo:** [https://kskkoushik135--memorae-web.modal.run](https://kskkoushik135--memorae-web.modal.run)
+
 **Memorae** is an agentic personal-memory assistant. It reads a real message stream — WhatsApp, Slack, Gmail, calendar, notes, reminders — and answers questions that require **judgement over time**: what matters today, what is slipping, what changed, what is still open.
 
 There are no pre-labelled commitments, no regex enrichment pipeline, and no hidden state the model can hallucinate from. The LLM discovers everything by **calling tools** over raw events, then synthesizes a grounded answer with an optional audit trail.

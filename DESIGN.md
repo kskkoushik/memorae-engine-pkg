@@ -1,4 +1,4 @@
-# Memorae — Design Document
+# Memorae Assignment — Design Document
 
 This document explains **what Memorae does**, **how data flows from indexing to final answer**, and **every rule the agent follows**. It is written so that an engineer, reviewer, or product person can understand the system without reading the code first.
 
