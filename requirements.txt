@@ -1,0 +1,5 @@
+# Stdlib only — no third-party dependencies.
+# The engine runs on a clean Python 3.10+ interpreter.
+#
+# Optional (only if you set MEMORAE_LLM=1 for LLM polish): none required either,
+# the Anthropic API is called over urllib from the standard library.

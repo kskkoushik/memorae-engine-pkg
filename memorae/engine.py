@@ -1,0 +1,86 @@
+"""
+engine.py
+---------
+Loads raw events + optional RAG index. The agent discovers context via tools —
+no regex enrichment or pre-built commitment ledger on the agent path.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+
+from .event_store import EventStore, parse_ts
+from .rag import EventIndex
+
+DEFAULT_NOW = datetime(2026, 4, 13, 3, 0, 0, tzinfo=timezone.utc)
+
+
+@dataclass
+class Engine:
+    store: EventStore
+    rag_index: object | None = field(default=None, repr=False)
+    now: datetime = field(default_factory=lambda: DEFAULT_NOW)
+
+    @classmethod
+    def from_events_file(cls, path: str, now: datetime = DEFAULT_NOW) -> "Engine":
+        store = EventStore.from_file(path, now=now)
+        rag_index = None
+        if os.environ.get("MEMORAE_RAG") == "1":
+            try:
+                rag_index = EventIndex.build_from_store(store)
+            except Exception as e:
+                import sys
+                print(
+                    f"[engine] RAG index unavailable ({type(e).__name__}: "
+                    f"{str(e)[:160]}); continuing without semantic search.",
+                    file=sys.stderr,
+                )
+        return cls(store=store, rag_index=rag_index, now=now)
+
+    @property
+    def mem(self):
+        """Shim for legacy API endpoints that expect .mem.owner / .mem.now."""
+        return self.store
+
+    def agent(self):
+        from .agent import MemoryAgent
+        return MemoryAgent(self)
+
+    def chat(self, query: str, budget: int = 2500) -> dict:
+        return self.agent().chat(query, budget=budget)
+
+    def rag_stats(self) -> dict:
+        if self.rag_index is None:
+            return {"enabled": False, "indexed": 0}
+        return self.rag_index.stats()
+
+    def event_detail(self, idx: int) -> dict | None:
+        if idx < 0 or idx >= len(self.store.events):
+            return None
+        e = self.store.events[idx]
+        return {
+            **e.to_dict(),
+            "future": e.ts > self.now,
+        }
+
+    # Legacy stubs (old inspectable pipeline removed from agent path)
+    def answer(self, query: str, budget_tokens: int = 1500, use_llm: bool = True) -> dict:
+        return self.chat(query, budget=budget_tokens)
+
+    def ledger(self) -> list[dict]:
+        return []
+
+    def topics(self) -> list[dict]:
+        return []
+
+    def run_suite(self, use_llm: bool = True) -> list[dict]:
+        queries = [
+            "What should I focus on today?",
+            "What commitments am I at risk of missing?",
+            "What have I been procrastinating on?",
+            "Summarize everything related to the UIE proposal.",
+        ]
+        return [self.answer(q, use_llm=use_llm) for q in queries]

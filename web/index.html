@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Memorae · your memory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+  --bg:#080b10; --surface:#0f1419; --raised:#161d27; --hover:#1c2533; --line:#243044;
+  --text:#edf0f5; --muted:#8b97ab; --dim:#5a6678;
+  --accent:#5eead4; --accent-dim:rgba(94,234,212,.1);
+  --violet:#a78bfa; --violet-dim:rgba(167,139,250,.12);
+  --amber:#fbbf24; --amber-dim:rgba(251,191,36,.1);
+  --err:#f87171; --user-bg:#1a2744;
+  --mono:"IBM Plex Mono",monospace; --sans:"DM Sans",system-ui,sans-serif; --r:14px;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans)}
+body{background:radial-gradient(ellipse 80% 50% at 100% -10%,rgba(94,234,212,.07),transparent),radial-gradient(ellipse 60% 40% at 0% 100%,rgba(167,139,250,.06),transparent),var(--bg)}
+.shell{display:flex;flex-direction:column;height:100vh;max-width:920px;margin:0 auto}
+.top{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);background:rgba(8,11,16,.88);backdrop-filter:blur(16px);flex-shrink:0}
+.brand{font-weight:700;font-size:18px}.brand span{color:var(--accent)}
+.greet{font-size:13px;color:var(--muted);flex:1}.greet strong{color:var(--text);font-weight:500}
+.badge{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:4px 10px;display:flex;align-items:center;gap:5px}
+.badge.live{border-color:rgba(94,234,212,.35);color:var(--accent)}
+.badge .pulse{width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.badge.live .pulse{background:var(--accent);animation:pulse 2s ease infinite}
+.feed{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:20px;scroll-behavior:smooth}
+.hero{text-align:center;padding:48px 16px 24px}
+.hero h1{font-size:26px;font-weight:600;margin-bottom:8px}
+.hero p{color:var(--muted);font-size:14px;line-height:1.6;max-width:440px;margin:0 auto 24px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chip{background:var(--raised);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer;transition:.15s}
+.chip:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.turn{display:flex;flex-direction:column;gap:8px;animation:rise .3s ease}
+.turn.user{align-items:flex-end}
+.user-bubble{max-width:min(520px,88vw);padding:12px 16px;background:var(--user-bg);border:1px solid var(--line);border-radius:var(--r) var(--r) 4px var(--r);font-size:14.5px;line-height:1.55}
+.agent-block{max-width:min(720px,92vw);width:100%;display:flex;flex-direction:column;gap:10px}
+
+/* loading */
+.loader{padding:16px 18px;background:var(--surface);border:1px solid var(--line);border-radius:4px var(--r) var(--r) var(--r)}
+.loader-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.loader-dots{display:flex;gap:5px}
+.loader-dots span{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:dotBounce 1.2s ease infinite}
+.loader-dots span:nth-child(2){animation-delay:.15s}
+.loader-dots span:nth-child(3){animation-delay:.3s}
+.loader-phase{font-size:13px;color:var(--muted);font-weight:500}
+.loader-bar{height:3px;background:var(--raised);border-radius:99px;overflow:hidden}
+.loader-bar i{display:block;height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:shimmer 1.4s ease infinite}
+.skel{display:flex;flex-direction:column;gap:8px}
+.skel-line{height:10px;border-radius:6px;background:linear-gradient(90deg,var(--raised) 25%,var(--hover) 50%,var(--raised) 75%);background-size:200% 100%;animation:shimmer 1.4s ease infinite}
+.skel-line:nth-child(1){width:92%}.skel-line:nth-child(2){width:78%}.skel-line:nth-child(3){width:55%}
+
+/* activity */
+.activity{display:flex;flex-direction:column;gap:8px}
+.tools-list{display:flex;flex-direction:column;gap:6px}
+
+/* tool chip — name + reason only */
+.tool-chip{
+  border:1px solid var(--line);border-radius:12px;background:var(--surface);
+  overflow:hidden;animation:rise .2s ease;transition:border-color .15s;
+}
+.tool-chip.running{border-color:rgba(167,139,250,.35)}
+.tool-chip.done{border-color:rgba(94,234,212,.2)}
+.tool-chip-head{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;cursor:pointer;user-select:none}
+.tool-chip-head:hover{background:var(--hover)}
+.tool-chip-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;background:var(--violet)}
+.tool-chip.running .tool-chip-dot{background:var(--accent);animation:pulse 1s ease infinite}
+.tool-chip.done .tool-chip-dot{background:var(--accent)}
+.tool-chip-main{flex:1;min-width:0}
+.tool-chip-name{font-size:12px;font-weight:600;color:var(--violet);font-family:var(--mono);display:block}
+.tool-chip-reason{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px;display:block}
+.tool-chip-chev{color:var(--dim);font-size:10px;margin-top:4px;flex-shrink:0;transition:transform .2s}
+.tool-chip.open .tool-chip-chev{transform:rotate(90deg)}
+.tool-chip-detail{
+  display:none;padding:8px 12px 10px 30px;border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:10px;color:var(--dim);white-space:pre-wrap;word-break:break-word;
+  max-height:120px;overflow-y:auto;line-height:1.5;
+}
+.tool-chip.open .tool-chip-detail{display:block}
+
+/* reasoning panel — collapsible, separate */
+.think-panel{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;animation:rise .2s ease}
+.think-panel.live{border-color:rgba(251,191,36,.25)}
+.think-head{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;user-select:none}
+.think-head:hover{background:var(--hover)}
+.think-icon{color:var(--amber);font-size:13px;flex-shrink:0}
+.think-title{font-size:12px;font-weight:600;color:var(--amber);flex:1}
+.think-preview{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;display:none}
+.think-panel:not(.open) .think-preview{display:block}
+.think-chev{color:var(--dim);font-size:10px;transition:transform .2s}
+.think-panel.open .think-chev{transform:rotate(90deg)}
+.think-body{
+  display:none;padding:10px 12px 12px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--muted);line-height:1.6;max-height:200px;overflow-y:auto;
+  white-space:pre-wrap;word-break:break-word;
+}
+.think-panel.open .think-body{display:block}
+.think-body.streaming::after{content:"▍";animation:blink .7s step-end infinite;color:var(--amber)}
+
+/* answer */
+.answer{padding:14px 18px;background:var(--surface);border:1px solid var(--line);border-radius:4px var(--r) var(--r) var(--r);font-size:14.5px;line-height:1.7;display:none}
+.answer.visible{display:block}
+.answer.streaming::after{content:"▍";animation:blink .7s step-end infinite;color:var(--accent)}
+.answer p{margin:0 0 10px}.answer p:last-child{margin-bottom:0}
+.answer ul,.answer ol{margin:8px 0 12px;padding-left:22px}
+.answer li{margin:4px 0}.answer li::marker{color:var(--accent)}
+.answer strong{font-weight:600}.answer code{font-family:var(--mono);font-size:12px;background:var(--raised);padding:2px 5px;border-radius:4px}
+
+/* explanation toggle */
+.exp-toggle{align-self:flex-start;background:var(--raised);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:12px;color:var(--muted);cursor:pointer;display:none;align-items:center;gap:6px;transition:.15s;font-family:var(--sans)}
+.exp-toggle:hover{border-color:var(--violet);color:var(--violet);background:var(--violet-dim)}
+.exp-toggle.visible{display:inline-flex}
+.exp-toggle .chev{transition:transform .2s;font-size:10px}
+.exp-toggle.open .chev{transform:rotate(90deg)}
+.exp-panel{display:none;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.exp-panel.open{display:block;animation:rise .25s ease}
+.exp-inner{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.exp-pair{border-left:2px solid var(--violet);padding-left:12px}
+.exp-q{font-size:11px;font-weight:600;color:var(--violet);margin-bottom:4px;font-family:var(--mono)}
+.exp-a{font-size:13px;color:var(--muted);line-height:1.6}
+.exp-a p{margin:0 0 6px}
+
+.compose{padding:14px 20px 22px;border-top:1px solid var(--line);background:rgba(8,11,16,.92);backdrop-filter:blur(16px);flex-shrink:0}
+.input-row{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 6px 6px 18px;transition:border-color .15s}
+.input-row:focus-within{border-color:rgba(94,234,212,.4)}
+textarea{flex:1;background:transparent;border:0;outline:0;color:var(--text);font-family:var(--sans);font-size:14.5px;resize:none;min-height:24px;max-height:140px;padding:10px 0;line-height:1.5}
+.send{width:42px;height:42px;border-radius:12px;border:0;background:var(--accent);color:#042f2e;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0}
+.send:disabled{opacity:.35;cursor:not-allowed}
+.foot{font-size:11px;color:var(--dim);text-align:center;margin-top:10px}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes blink{50%{opacity:0}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-5px);opacity:1}}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand">memora<span>e</span></div>
+    <div class="greet" id="greet">your personal memory</div>
+    <span class="badge" id="ragBadge"><span class="pulse"></span><span id="ragLabel">RAG</span></span>
+    <span class="badge live" id="llmBadge"><span class="pulse"></span><span id="llmLabel">agent</span></span>
+  </header>
+  <div class="feed" id="feed">
+    <div class="hero" id="hero">
+      <h1>What's on your mind?</h1>
+      <p>I search your real message stream and help you prioritize, recall, and stay ahead.</p>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+  <div class="compose">
+    <div class="input-row">
+      <textarea id="input" rows="1" placeholder="Ask about priorities, people, deadlines, projects…" onkeydown="onKey(event)"></textarea>
+      <button class="send" id="sendBtn" onclick="send()" title="Send">↑</button>
+    </div>
+    <div class="foot">Agentic memory · tools stream live · grounded in your events only</div>
+  </div>
+</div>
+<script>
+marked.setOptions({ breaks: true, gfm: true });
+
+const PRESETS = [
+  "What should I focus on today?",
+  "What am I at risk of missing?",
+  "Summarize everything about the UIE proposal.",
+  "What did Nina ask for recently?",
+  "Show me Slack messages from the last 3 days.",
+];
+let busy = false;
+
+function $(id) { return document.getElementById(id); }
+function onKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }
+function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 140) + "px"; }
+$("input").addEventListener("input", e => autoGrow(e.target));
+function scrollFeed() { const f = $("feed"); f.scrollTop = f.scrollHeight; }
+
+function splitContent(raw) {
+  const match = raw.match(/<explanation>([\s\S]*?)<\/explanation>/i);
+  let answer = raw;
+  let explanation = "";
+  if (match) {
+    answer = raw.slice(0, match.index).trim();
+    explanation = match[1].trim();
+  } else {
+    const open = raw.indexOf("<explanation>");
+    if (open !== -1) answer = raw.slice(0, open).trim();
+  }
+  const pairs = [];
+  const re = /<question>\s*([\s\S]*?)\s*<\/question>\s*<answer>\s*([\s\S]*?)\s*<\/answer>/gi;
+  let m;
+  while ((m = re.exec(explanation)) !== null) {
+    const q = m[1].trim(), a = m[2].trim();
+    if (q && a) pairs.push({ q, a });
+  }
+  return { answer, explanation, pairs };
+}
+
+function renderExplanation(pairs) {
+  if (!pairs.length) return "";
+  return pairs.map(p =>
+    `<div class="exp-pair"><div class="exp-q">${esc(p.q)}</div><div class="exp-a">${marked.parse(p.a)}</div></div>`
+  ).join("");
+}
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+async function boot() {
+  PRESETS.forEach(q => {
+    const c = document.createElement("button");
+    c.className = "chip";
+    c.textContent = q.length > 44 ? q.slice(0, 42) + "…" : q;
+    c.title = q;
+    c.onclick = () => { $("input").value = q; send(); };
+    $("chips").appendChild(c);
+  });
+  try {
+    const h = await (await fetch("/api/health")).json();
+    const now = (h.now || "").replace("T", " ").replace("Z", " UTC").slice(0, 22);
+    $("greet").innerHTML = `for <strong>${h.owner || "you"}</strong> · ${now}`;
+    if (h.rag_enabled) { $("ragBadge").classList.add("live"); $("ragLabel").textContent = `RAG ${h.rag_indexed}`; }
+    else $("ragLabel").textContent = "RAG off";
+    if (h.llm_enabled) $("llmLabel").textContent = (h.llm_model || "agent").split("/").pop();
+    else { $("llmBadge").classList.remove("live"); $("llmLabel").textContent = "offline"; }
+  } catch {}
+}
+
+function addUserTurn(text) {
+  $("hero")?.remove();
+  const turn = document.createElement("div");
+  turn.className = "turn user";
+  const bubble = document.createElement("div");
+  bubble.className = "user-bubble";
+  bubble.textContent = text;
+  turn.appendChild(bubble);
+  $("feed").appendChild(turn);
+  scrollFeed();
+}
+
+function addAgentTurn() {
+  const block = document.createElement("div");
+  block.className = "agent-block";
+
+  const loader = document.createElement("div");
+  loader.className = "loader";
+  loader.innerHTML = `
+    <div class="loader-row">
+      <div class="loader-dots"><span></span><span></span><span></span></div>
+      <div class="loader-phase" id="phaseLabel">Starting…</div>
+    </div>
+    <div class="loader-bar"><i></i></div>
+    <div class="skel" style="margin-top:14px">
+      <div class="skel-line"></div><div class="skel-line"></div><div class="skel-line"></div>
+    </div>`;
+
+  const activity = document.createElement("div");
+  activity.className = "activity";
+  activity.style.display = "none";
+
+  const thinkPanel = document.createElement("div");
+  thinkPanel.className = "think-panel";
+  thinkPanel.style.display = "none";
+  thinkPanel.innerHTML = `
+    <div class="think-head">
+      <span class="think-icon">◈</span>
+      <span class="think-title">Thinking</span>
+      <span class="think-preview"></span>
+      <span class="think-chev">▶</span>
+    </div>
+    <div class="think-body"></div>`;
+  thinkPanel.querySelector(".think-head").onclick = () => thinkPanel.classList.toggle("open");
+
+  const toolsList = document.createElement("div");
+  toolsList.className = "tools-list";
+
+  activity.appendChild(thinkPanel);
+  activity.appendChild(toolsList);
+
+  const answer = document.createElement("div");
+  answer.className = "answer";
+
+  const expToggle = document.createElement("button");
+  expToggle.className = "exp-toggle";
+  expToggle.innerHTML = '<span class="chev">▶</span> How I reached this answer';
+  const expPanel = document.createElement("div");
+  expPanel.className = "exp-panel";
+  const expInner = document.createElement("div");
+  expInner.className = "exp-inner";
+  expPanel.appendChild(expInner);
+  expToggle.onclick = () => {
+    expToggle.classList.toggle("open");
+    expPanel.classList.toggle("open");
+  };
+
+  block.appendChild(loader);
+  block.appendChild(activity);
+  block.appendChild(answer);
+  block.appendChild(expToggle);
+  block.appendChild(expPanel);
+
+  const turn = document.createElement("div");
+  turn.className = "turn agent";
+  turn.appendChild(block);
+  $("feed").appendChild(turn);
+  scrollFeed();
+
+  return {
+    loader, activity, thinkPanel, toolsList, answer, expToggle, expPanel, expInner,
+    phaseLabel: loader.querySelector(".loader-phase"),
+    thinkBody: thinkPanel.querySelector(".think-body"),
+    thinkPreview: thinkPanel.querySelector(".think-preview"),
+    toolEls: {}, reasoningText: "", hasActivity: false,
+  };
+}
+
+function setPhase(ui, label) {
+  if (ui.phaseLabel) ui.phaseLabel.textContent = label;
+}
+
+function showActivity(ui) {
+  if (!ui.hasActivity) {
+    ui.activity.style.display = "flex";
+    ui.hasActivity = true;
+  }
+}
+
+function hideLoader(ui) {
+  if (ui.loader) { ui.loader.style.display = "none"; ui.loader = null; }
+}
+
+function formatToolName(name) {
+  return name.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function addToolChip(ui, name, reason, status) {
+  showActivity(ui);
+  const chip = document.createElement("div");
+  chip.className = "tool-chip " + status;
+  chip.innerHTML = `
+    <div class="tool-chip-head">
+      <span class="tool-chip-dot"></span>
+      <div class="tool-chip-main">
+        <span class="tool-chip-name">${esc(formatToolName(name))}</span>
+        <span class="tool-chip-reason">${esc(reason || "Searching memory…")}</span>
+      </div>
+      <span class="tool-chip-chev">▶</span>
+    </div>
+    <div class="tool-chip-detail"></div>`;
+  chip.querySelector(".tool-chip-head").onclick = () => chip.classList.toggle("open");
+  ui.toolsList.appendChild(chip);
+  scrollFeed();
+  return {
+    chip,
+    detail: chip.querySelector(".tool-chip-detail"),
+  };
+}
+
+function ensureThinking(ui) {
+  ui.thinkPanel.style.display = "block";
+  ui.thinkPanel.classList.add("live");
+  showActivity(ui);
+}
+
+function updateThinking(ui, full, streaming) {
+  ensureThinking(ui);
+  ui.reasoningText = full;
+  ui.thinkBody.textContent = full;
+  ui.thinkBody.classList.toggle("streaming", streaming);
+  const preview = full.replace(/\s+/g, " ").trim();
+  ui.thinkPreview.textContent = preview ? preview.slice(-60) : "…";
+  if (ui.thinkPanel.querySelector(".think-title"))
+    ui.thinkPanel.querySelector(".think-title").textContent = streaming ? "Thinking…" : "Thought process";
+}
+
+function updateAnswer(ui, full) {
+  const { answer, pairs } = splitContent(full);
+  if (answer) {
+    hideLoader(ui);
+    ui.answer.classList.add("visible", "streaming");
+    ui.answer.innerHTML = marked.parse(answer);
+  }
+  if (pairs.length) {
+    ui.expInner.innerHTML = renderExplanation(pairs);
+    ui.expToggle.classList.add("visible");
+  }
+}
+
+function finalizeTurn(ui, full) {
+  hideLoader(ui);
+  ui.answer.classList.remove("streaming");
+  const { answer, pairs } = splitContent(full);
+  if (answer) {
+    ui.answer.classList.add("visible");
+    ui.answer.innerHTML = marked.parse(answer);
+  } else if (!ui.hasActivity) {
+    ui.answer.classList.add("visible");
+    ui.answer.innerHTML = "<em>No response received.</em>";
+  }
+  if (pairs.length) {
+    ui.expInner.innerHTML = renderExplanation(pairs);
+    ui.expToggle.classList.add("visible");
+  }
+  if (ui.reasoningText) {
+    updateThinking(ui, ui.reasoningText, false);
+    ui.thinkPanel.classList.remove("live");
+  }
+}
+
+async function send() {
+  const input = $("input");
+  const q = input.value.trim();
+  if (!q || busy) return;
+  busy = true;
+  $("sendBtn").disabled = true;
+  input.value = "";
+  autoGrow(input);
+
+  addUserTurn(q);
+  const ui = addAgentTurn();
+  let full = "";
+  let toolCounter = 0;
+
+  try {
+    const resp = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: q }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (ev.type === "phase") setPhase(ui, ev.label || "Working…");
+
+        if (ev.type === "tool_start") {
+          hideLoader(ui);
+          const key = ev.name + "_" + (++toolCounter);
+          const t = addToolChip(ui, ev.name, ev.reason || "", "running");
+          if (ev.input && Object.keys(ev.input).length)
+            t.detail.textContent = JSON.stringify(ev.input, null, 2);
+          ui.toolEls[key] = t;
+        }
+        if (ev.type === "tool_end") {
+          const keys = Object.keys(ui.toolEls).filter(k => k.startsWith(ev.name + "_"));
+          const t = keys.length ? ui.toolEls[keys[keys.length - 1]] : null;
+          if (t) {
+            t.chip.classList.remove("running");
+            t.chip.classList.add("done");
+            if (ev.summary) {
+              const prev = t.detail.textContent || "";
+              t.detail.textContent = prev ? prev + "\n\n—\n" + ev.summary : ev.summary;
+            }
+          }
+        }
+        if (ev.type === "reasoning") {
+          hideLoader(ui);
+          const full = ev.full != null ? ev.full : (ui.reasoningText + (ev.text || ""));
+          updateThinking(ui, full, true);
+          scrollFeed();
+        }
+        if (ev.type === "token") {
+          full += ev.text;
+          updateAnswer(ui, full);
+          scrollFeed();
+        }
+        if (ev.type === "error") {
+          full += "\n\n**Error:** " + ev.text;
+          updateAnswer(ui, full);
+        }
+        if (ev.type === "done") break;
+      }
+    }
+  } catch (e) {
+    full = "Couldn't reach the agent. Is `python api.py` running?\n\n" + e.message;
+    finalizeTurn(ui, full);
+  }
+
+  finalizeTurn(ui, full);
+  busy = false;
+  $("sendBtn").disabled = false;
+  input.focus();
+  scrollFeed();
+}
+
+boot();
+</script>
+</body>
+</html>
