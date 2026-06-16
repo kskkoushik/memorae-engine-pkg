@@ -1,40 +1,30 @@
 #!/usr/bin/env python3
-"""
-api.py - FastAPI server for the Memorae agentic memory agent.
-
-Run:
-    pip install -r requirements-web.txt
-    python api.py                 # http://127.0.0.1:8000
-"""
+"""FastAPI server for the Memorae agent. Run: pip install -r requirements.txt && python api.py"""
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(HERE, ".env"))
-
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from memorae.engine import Engine, DEFAULT_NOW
 
-_events = os.environ.get(
-    "MEMORAE_EVENTS",
-    os.path.join(HERE, "memorae_mock_events.json"),
-)
+HERE = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(HERE, ".env"))
+
+_events = os.environ.get("MEMORAE_EVENTS", os.path.join(HERE, "memorae_mock_events.json"))
 if not os.path.isabs(_events):
     _events = os.path.normpath(os.path.join(HERE, _events))
 EVENTS = _events
 INDEX = os.path.join(HERE, "web", "index.html")
 
 app = FastAPI(title="Memorae Memory Agent", version="3.0")
-
 _engine: Engine | None = None
 
 
@@ -51,14 +41,16 @@ def engine() -> Engine:
             raise RuntimeError(f"events file not found: {EVENTS}")
         _engine = Engine.from_events_file(EVENTS, now=now)
         if _engine.rag_index is None:
-            import sys
-            print("[api] WARNING: RAG index not loaded — semantic search will retry on first query", file=sys.stderr, flush=True)
+            print(
+                "[api] WARNING: RAG not loaded — semantic search retries on first query",
+                file=sys.stderr,
+                flush=True,
+            )
     return _engine
 
 
 class ChatIn(BaseModel):
     query: str
-    budget: int = 2500
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -72,9 +64,7 @@ def index() -> str:
 @app.get("/api/health")
 def health() -> dict:
     eng = engine()
-    llm_on = os.environ.get("MEMORAE_LLM") == "1" and bool(
-        os.environ.get("OPENROUTER_API_KEY")
-    )
+    llm_on = os.environ.get("MEMORAE_LLM") == "1" and bool(os.environ.get("OPENROUTER_API_KEY"))
     rag = eng.rag_stats()
     return {
         "ok": True,
@@ -88,13 +78,6 @@ def health() -> dict:
         "rag_indexed": rag.get("indexed", 0),
         "mode": "agentic_langchain",
     }
-
-
-@app.post("/api/chat")
-def chat(body: ChatIn) -> dict:
-    if not body.query.strip():
-        raise HTTPException(status_code=400, detail="query is empty")
-    return engine().chat(body.query, budget=body.budget)
 
 
 @app.post("/api/chat/stream")

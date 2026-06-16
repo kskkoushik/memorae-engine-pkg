@@ -1,12 +1,3 @@
-"""
-rag.py
-------
-Semantic retrieval via ChromaDB + OpenRouter embeddings.
-
-Embeddings are precomputed and stored in ChromaDB (no embedding_function on
-reload) to avoid version/bindings mismatches across restarts.
-"""
-
 from __future__ import annotations
 
 import json
@@ -18,7 +9,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .event_store import EventStore
-    from .memory import Memory
 
 COLLECTION_NAME = "memorae_events"
 EMBED_URL = "https://openrouter.ai/api/v1/embeddings"
@@ -70,8 +60,6 @@ class RagHit:
 
 
 class EventIndex:
-    """ChromaDB-backed semantic index with precomputed embeddings."""
-
     def __init__(self, collection, indexed: int, embed_model: str) -> None:
         self._collection = collection
         self._indexed = indexed
@@ -79,14 +67,11 @@ class EventIndex:
 
     @classmethod
     def build_from_store(cls, store: "EventStore") -> "EventIndex | None":
-        """Build or load RAG index from a raw EventStore (agent path)."""
         if os.environ.get("MEMORAE_RAG") != "1":
             return None
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
             return None
-
-        import chromadb
 
         persist_dir = _persist_dir()
         os.makedirs(persist_dir, exist_ok=True)
@@ -95,32 +80,6 @@ class EventIndex:
         expected = len(visible)
         meta_path = os.path.join(persist_dir, META_FILE)
         meta = {"count": expected, "model": embed_model, "now": store.now.isoformat()}
-
-        def _event_rows():
-            for e in visible:
-                yield e.idx, e.content, e.source, e.ts
-
-        return cls._build_index(
-            persist_dir, embed_model, expected, meta_path, meta, api_key, _event_rows()
-        )
-
-    @classmethod
-    def build(cls, mem: "Memory") -> "EventIndex | None":
-        if os.environ.get("MEMORAE_RAG") != "1":
-            return None
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            return None
-
-        import chromadb
-
-        persist_dir = _persist_dir()
-        os.makedirs(persist_dir, exist_ok=True)
-        embed_model = os.environ.get("MEMORAE_EMBED_MODEL", "openai/text-embedding-3-small")
-        visible = [e for e in mem.events if e.ts <= mem.now]
-        expected = len(visible)
-        meta_path = os.path.join(persist_dir, META_FILE)
-        meta = {"count": expected, "model": embed_model, "now": mem.now.isoformat()}
 
         def _event_rows():
             for e in visible:
@@ -164,7 +123,6 @@ class EventIndex:
             except Exception:
                 pass
 
-        # Rebuild from scratch — avoids corrupted / mismatched Chroma state
         if os.path.isdir(persist_dir):
             shutil.rmtree(persist_dir, ignore_errors=True)
         os.makedirs(persist_dir, exist_ok=True)

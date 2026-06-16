@@ -1,10 +1,3 @@
-"""
-event_tools.py
---------------
-LangChain tools for the agentic memory loop. The agent searches raw events
-via source, date, keyword, and semantic (RAG) filters — no pre-tagged commitments.
-"""
-
 from __future__ import annotations
 
 import json

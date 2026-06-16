@@ -1,9 +1,3 @@
-"""
-agent.py
---------
-LangChain agentic memory loop: ChatOpenRouter + event search tools + streaming.
-"""
-
 from __future__ import annotations
 
 import json
@@ -24,8 +18,7 @@ def _log(msg: str) -> None:
 
 
 def _agent_config() -> dict:
-    limit = int(os.environ.get("MEMORAE_RECURSION_LIMIT", "40"))
-    return {"recursion_limit": limit}
+    return {"recursion_limit": int(os.environ.get("MEMORAE_RECURSION_LIMIT", "40"))}
 
 
 def _model():
@@ -48,8 +41,6 @@ def _model():
 class MemoryAgent:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
-        self._tools = build_event_tools(engine)
-        self._reasoning_buf = ""
         now = engine.now.isoformat().replace("+00:00", "Z")
         system = build_system_prompt(
             owner=engine.store.owner,
@@ -59,10 +50,13 @@ class MemoryAgent:
         )
         self._agent = create_agent(
             model=_model(),
-            tools=self._tools,
+            tools=build_event_tools(engine),
             system_prompt=system,
         )
-        _log(f"ready | owner={engine.store.owner} | events={len(engine.store._visible)} | rag={engine.rag_index is not None} | recursion_limit={_agent_config()['recursion_limit']}")
+        _log(
+            f"ready | owner={engine.store.owner} | events={len(engine.store._visible)} | "
+            f"rag={engine.rag_index is not None} | recursion_limit={_agent_config()['recursion_limit']}"
+        )
 
     def _extract_text(self, chunk) -> str:
         if chunk is None:
@@ -98,7 +92,6 @@ class MemoryAgent:
         return rc if isinstance(rc, str) else ""
 
     def _merge_reasoning(self, chunk: str) -> tuple[str, str]:
-        """Merge streaming reasoning; return (full_text, delta_only)."""
         if not chunk:
             return self._reasoning_buf, ""
         buf = self._reasoning_buf
@@ -211,40 +204,26 @@ class MemoryAgent:
         _log("done")
         yield {"type": "done"}
 
-    async def achat_stream(self, query: str, budget: int = 2500) -> AsyncIterator[dict]:
-        async for ev in self.astream_events(query):
-            yield ev
-
-    def chat_stream(self, query: str) -> Iterator[dict]:
+    def chat(self, query: str) -> dict:
         import asyncio
-        async def _run():
-            async for ev in self.astream_events(query):
-                yield ev
-        loop = asyncio.new_event_loop()
-        try:
-            gen = _run()
-            while True:
-                try:
-                    yield loop.run_until_complete(gen.__anext__())
-                except StopAsyncIteration:
-                    break
-        finally:
-            loop.close()
 
-    def chat(self, query: str, budget: int = 2500) -> dict:
         answer = ""
         tool_calls: list[dict] = []
-        for ev in self.chat_stream(query):
-            if ev.get("type") == "token":
-                answer += ev.get("text", "")
-            elif ev.get("type") in ("tool_start", "tool_end"):
-                tool_calls.append(ev)
-            elif ev.get("type") == "error":
-                answer = ev.get("text", answer)
+
+        async def _collect():
+            nonlocal answer
+            async for ev in self.astream_events(query):
+                if ev.get("type") == "token":
+                    answer += ev.get("text", "")
+                elif ev.get("type") in ("tool_start", "tool_end"):
+                    tool_calls.append(ev)
+                elif ev.get("type") == "error":
+                    answer = ev.get("text", answer)
+
+        asyncio.run(_collect())
         return {
             "query": query,
             "answer": answer,
-            "intent": "agentic",
             "tool_calls": tool_calls,
             "debug": {
                 "now": self.engine.now.isoformat().replace("+00:00", "Z"),

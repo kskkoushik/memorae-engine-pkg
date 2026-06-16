@@ -1,5 +1,10 @@
-# Stdlib only — no third-party dependencies.
-# The engine runs on a clean Python 3.10+ interpreter.
-#
-# Optional (only if you set MEMORAE_LLM=1 for LLM polish): none required either,
-# the Anthropic API is called over urllib from the standard library.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-dotenv>=1.0
+chromadb>=0.5.0,<1.6
+httpx>=0.27.0
+rapidfuzz>=3.0
+langchain>=1.0
+langchain-core>=0.3
+langchain-openrouter>=0.1
+langgraph>=0.4

@@ -1,11 +1,3 @@
-"""
-event_store.py
---------------
-Raw event storage and fast filtering — no regex enrichment or commitment tagging.
-Events are loaded as-is from JSON (timestamp, source, content) and searched
-via source/date/keyword/RAG filters for the agentic loop.
-"""
-
 from __future__ import annotations
 
 import json
