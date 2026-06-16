@@ -1,4 +1,4 @@
-# Memorae Assignment — Design Document
+# Memorae Assignment - Design Document
 
 This document explains **what Memorae does**, **how data flows from indexing to final answer**, and **every rule the agent follows**. It is written so that an engineer, reviewer, or product person can understand the system without reading the code first.
 
@@ -9,10 +9,10 @@ This document explains **what Memorae does**, **how data flows from indexing to 
 1. [Problem statement](#1-problem-statement)
 2. [Design principles](#2-design-principles)
 3. [System overview](#3-system-overview)
-4. [Phase 1 — Startup and indexing](#4-phase-1--startup-and-indexing)
-5. [Phase 2 — User message arrives](#5-phase-2--user-message-arrives)
-6. [Phase 3 — Agent tool loop](#6-phase-3--agent-tool-loop)
-7. [Phase 4 — Answer and explanation](#7-phase-4--answer-and-explanation)
+4. [Phase 1 - Startup and indexing](#4-phase-1--startup-and-indexing)
+5. [Phase 2 - User message arrives](#5-phase-2--user-message-arrives)
+6. [Phase 3 - Agent tool loop](#6-phase-3--agent-tool-loop)
+7. [Phase 4 - Answer and explanation](#7-phase-4--answer-and-explanation)
 8. [The five tools (detailed)](#8-the-five-tools-detailed)
 9. [Agent rules (complete)](#9-agent-rules-complete)
 10. [Worked example](#10-worked-example)
@@ -23,7 +23,7 @@ This document explains **what Memorae does**, **how data flows from indexing to 
 
 ## 1. Problem statement
 
-People's lives are scattered across messages. Important information — deadlines, asks, status changes — is buried in:
+People's lives are scattered across messages. Important information - deadlines, asks, status changes - is buried in:
 
 - WhatsApp threads with friends and colleagues
 - Slack channels with noise (`#random`, lunch polls)
@@ -54,7 +54,7 @@ Nobody labels messages "URGENT" or "COMMITMENT." A system that **pre-tags** even
 
 ```mermaid
 flowchart TB
-    subgraph startup [Startup — once per container]
+    subgraph startup [Startup - once per container]
         JSON[memorae_mock_events.json]
         ES[EventStore]
         KW[Keyword index]
@@ -83,14 +83,14 @@ flowchart TB
 
 **Stack:**
 
-- **EventStore** — in-memory raw events + inverted keyword index + date/source filters
-- **ChromaDB** — vector index over event `content` (optional, `MEMORAE_RAG=1`)
-- **LangChain agent** — `create_agent` with ChatOpenRouter + tools
-- **FastAPI** — SSE streaming to `web/index.html`
+- **EventStore** - in-memory raw events + inverted keyword index + date/source filters
+- **ChromaDB** - vector index over event `content` (optional, `MEMORAE_RAG=1`)
+- **LangChain agent** - `create_agent` with ChatOpenRouter + tools
+- **FastAPI** - SSE streaming to `web/index.html`
 
 ---
 
-## 4. Phase 1 — Startup and indexing
+## 4. Phase 1 - Startup and indexing
 
 When the server starts (or a Modal container boots), `Engine.from_events_file()` runs once.
 
@@ -121,7 +121,7 @@ _word_index["nina"] → {0, 5, 8, ...}
 
 Multi-word phrases use **rapidfuzz** partial-ratio matching (score ≥ 75) plus substring fallback.
 
-This powers `get_event_by_keyword` — fast, no API call.
+This powers `get_event_by_keyword` - fast, no API call.
 
 ### 4.3 Build Chroma RAG index (optional)
 
@@ -132,7 +132,7 @@ If `MEMORAE_RAG=1` and `OPENROUTER_API_KEY` is set:
    - Else → **rebuild**
 2. For each visible event, embed `content` via OpenRouter (`MEMORAE_EMBED_MODEL`, default `openai/text-embedding-3-small`)
 3. Store in Chroma with metadata: `idx`, `source`, `timestamp`
-4. Embeddings are **precomputed and stored** — query time only embeds the user's search phrase
+4. Embeddings are **precomputed and stored** - query time only embeds the user's search phrase
 
 **Lazy retry:** if startup build fails, `engine.ensure_rag()` retries on first `search_event_by_query` call.
 
@@ -146,7 +146,7 @@ Each `/api/chat/stream` call does `engine().agent()`, which:
 
 ---
 
-## 5. Phase 2 — User message arrives
+## 5. Phase 2 - User message arrives
 
 ```
 User types: "What should I focus on today?"
@@ -164,13 +164,13 @@ MemoryAgent.astream_events(query)
 
 The agent receives:
 
-- **System prompt** — full rules from `prompts.py` (see [§9](#9-agent-rules-complete))
-- **User message** — the query
-- **Tools** — five functions with JSON schemas including required `reason`
+- **System prompt** - full rules from `prompts.py` (see [§9](#9-agent-rules-complete))
+- **User message** - the query
+- **Tools** - five functions with JSON schemas including required `reason`
 
 ---
 
-## 6. Phase 3 — Agent tool loop
+## 6. Phase 3 - Agent tool loop
 
 The agent runs a **ReAct-style loop**:
 
@@ -188,8 +188,8 @@ Each iteration is streamed to the UI:
 
 | SSE event | When |
 |-----------|------|
-| `tool_start` | Tool invoked — shows name, reason, params |
-| `tool_end` | Tool returned — shows matched/returned/hidden counts |
+| `tool_start` | Tool invoked - shows name, reason, params |
+| `tool_end` | Tool returned - shows matched/returned/hidden counts |
 | `reasoning` | Thinking model internal reasoning (if enabled) |
 | `token` | Final answer text streaming |
 | `phase` | UI status labels |
@@ -201,7 +201,7 @@ Priority order:
   1. search_event_by_date     (time-shaped questions)
   2. get_event_by_keyword     (named person/project)
   3. search_event_by_source   (named channel)
-  4. search_event_by_query    (LAST — semantic, expensive)
+  4. search_event_by_query    (LAST - semantic, expensive)
   0. get_available_sources   (discovery only)
 ```
 
@@ -230,27 +230,27 @@ If `hidden_due_to_limit > 0`, the agent must **not** answer from partial data wi
 
 ---
 
-## 7. Phase 4 — Answer and explanation
+## 7. Phase 4 - Answer and explanation
 
-### Part 1 — Human answer
+### Part 1 - Human answer
 
 Warm, direct prose. Lead with what matters most. Cite sources naturally ("Nina emailed Tuesday…"). No raw JSON. No "Based on the context provided."
 
-### Part 2 — Optional `<explanation>` block
+### Part 2 - Optional `<explanation>` block
 
 Appended after the answer when audit trail is useful:
 
 ```xml
 <explanation>
 <question>Which events or clusters were used?</question>
-<answer>Events idx=0, 56, 140 — UIE proposal thread across WhatsApp and Gmail.</answer>
+<answer>Events idx=0, 56, 140 - UIE proposal thread across WhatsApp and Gmail.</answer>
 
 <question>How contradictions or updates were resolved?</question>
 <answer>Apr 1 message said due Apr 10; Apr 8 message moved deadline to Apr 13. Reported Apr 13 (newer wins).</answer>
 </explanation>
 ```
 
-Only include Q/A pairs that are **relevant** — skip empty ones. The UI hides this block behind a "How I reached this answer" toggle.
+Only include Q/A pairs that are **relevant** - skip empty ones. The UI hides this block behind a "How I reached this answer" toggle.
 
 ---
 
@@ -268,7 +268,7 @@ Only include Q/A pairs that are **relevant** — skip empty ones. The UI hides t
 
 **Returns:** all visible events in `[start_date, end_date]`, chronological.
 
-**Use when:** any time anchor — "today", "last week", adaptive window.
+**Use when:** any time anchor - "today", "last week", adaptive window.
 
 **Date rules:**
 - ISO format: `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SSZ`
@@ -326,7 +326,7 @@ Only include Q/A pairs that are **relevant** — skip empty ones. The UI hides t
 ### Time
 
 - Fixed `now` (UTC) anchors all date math.
-- Events after `now` do not exist — never cite them.
+- Events after `now` do not exist - never cite them.
 - Newer message supersedes older on the same topic.
 - Agent computes all date ranges; never guesses ISO strings.
 
@@ -341,20 +341,20 @@ Only include Q/A pairs that are **relevant** — skip empty ones. The UI hides t
 
 - Narrowest tool first.
 - Multi-tool is normal: window → narrow → read.
-- Semantic search is expensive — last resort only.
+- Semantic search is expensive - last resort only.
 - Check truncation before answering.
 - Resolve updates chronologically within a thread.
 
 ### Voice
 
-- Cozy, organized friend — not a chatbot, not a database.
+- Cozy, organized friend - not a chatbot, not a database.
 - Lead with most urgent item.
 - Short paragraphs; numbered list for priorities.
 - Weave "how far I looked" into prose, not as a system disclaimer.
 
 ### Tool calls
 
-- Every call includes `reason` — one specific sentence.
+- Every call includes `reason` - one specific sentence.
 
 ### Response shape
 
@@ -377,14 +377,14 @@ Only include Q/A pairs that are **relevant** — skip empty ones. The UI hides t
 |-----|-----------|--------|-------------------|
 | 0 | Apr 1 | whatsapp | Aarav promised Nina UIE proposal v3 by **Friday Apr 10** |
 | 56 | Apr 8 | slack | `#uieng` Maya: deadline moved to **Apr 13**, not Friday |
-| 140 | Apr 12 | gmail | Nina: friendly nudge — need UIE v3 **today** |
+| 140 | Apr 12 | gmail | Nina: friendly nudge - need UIE v3 **today** |
 | 2 | Apr 1 | slack | `#random` sandwich in fridge (noise) |
 
 ---
 
 ### Step-by-step agent behavior
 
-**Step 1 — Set time window**
+**Step 1 - Set time window**
 
 ```
 Tool: search_event_by_date
@@ -394,7 +394,7 @@ Args: start_date=2026-04-13T00:00:00Z, end_date=2026-04-13T03:00:00Z
 
 Returns today's messages. May be sparse at 03:00 UTC.
 
-**Step 2 — Widen window (adaptive)**
+**Step 2 - Widen window (adaptive)**
 
 ```
 Tool: search_event_by_date
@@ -404,7 +404,7 @@ Args: start_date=2026-04-10T00:00:00Z, end_date=2026-04-13T03:00:00Z
 
 Returns nudges, deadline updates, recent asks.
 
-**Step 3 — Narrow to UIE thread**
+**Step 3 - Narrow to UIE thread**
 
 ```
 Tool: get_event_by_keyword
@@ -415,15 +415,15 @@ Args: keyword="UIE", start_date=2026-04-01T00:00:00Z
 Returns idx 0, 56, 140, … Agent reads chronologically:
 - Apr 1: due Apr 10
 - Apr 8: **moved to Apr 13** ← current deadline
-- Apr 12: Nina nudge — due today
+- Apr 12: Nina nudge - due today
 
-**Step 4 — Synthesize (no more tools needed)**
+**Step 4 - Synthesize (no more tools needed)**
 
-Agent does **not** call `search_event_by_query` — keyword + date were sufficient.
+Agent does **not** call `search_event_by_query` - keyword + date were sufficient.
 
 **Answer (Part 1):**
 
-> The thing pressing hardest today is Nina's UIE proposal v3 — she nudged you yesterday and the deadline is now **Monday Apr 13** (it moved from Friday after Maya flagged the slip in `#uieng`). I'd make that your first block: migration timeline, rollout risks, and rollback plan. …
+> The thing pressing hardest today is Nina's UIE proposal v3 - she nudged you yesterday and the deadline is now **Monday Apr 13** (it moved from Friday after Maya flagged the slip in `#uieng`). I'd make that your first block: migration timeline, rollout risks, and rollback plan. …
 
 **Explanation (Part 2, optional):**
 
@@ -481,5 +481,5 @@ The UI strips `<explanation>` from the main answer and shows it separately.
 
 ## Related documents
 
-- **[README.md](README.md)** — setup, API, optimization question
-- **[EVALUATION.md](EVALUATION.md)** — offline, online, and regression evaluation framework
+- **[README.md](README.md)** - setup, API, optimization question
+- **[EVALUATION.md](EVALUATION.md)** - offline, online, and regression evaluation framework
